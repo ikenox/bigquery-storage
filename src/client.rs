@@ -27,12 +27,13 @@ use tonic::metadata::MetadataValue;
 use tonic::transport::{Channel, ClientTlsConfig};
 use tonic::{Request, Streaming};
 
-use crate::googleapis::big_query_read_client::BigQueryReadClient;
-use crate::googleapis::{
+use crate::google::cloud::bigquery::storage::v1beta2::big_query_read_client::BigQueryReadClient;
+use crate::google::cloud::bigquery::storage::v1beta2::{
     read_session::{TableModifiers, TableReadOptions},
-    CreateReadSessionRequest, DataFormat, ReadRowsRequest, ReadRowsResponse,
-    ReadSession as BigQueryReadSession, ReadStream,
+    CreateReadSessionRequest, CreateWriteStreamRequest, DataFormat, ReadRowsRequest,
+    ReadRowsResponse, ReadSession as BigQueryReadSession, ReadStream,
 };
+
 use crate::Error;
 use crate::RowsStreamReader;
 
@@ -246,6 +247,7 @@ where
         meta.insert("x-goog-request-params", MetadataValue::from_str(params)?);
         Ok(req)
     }
+
     async fn create_read_session(
         &mut self,
         req: CreateReadSessionRequest,

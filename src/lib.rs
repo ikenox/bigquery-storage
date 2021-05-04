@@ -64,9 +64,21 @@
 //! For authentication you need an [Authenticator](yup_oauth2::authenticator::Authenticator), which is provided by the [yup_oauth2](yup_oauth2) crate.
 pub use yup_oauth2;
 
-pub mod googleapis {
-    //! Codegenerated from [`google.cloud.bigquery.storage.v1`](https://github.com/googleapis/googleapis/tree/master/google/cloud/bigquery/storage/v1).
-    tonic::include_proto!("google.cloud.bigquery.storage.v1");
+#[path = "./google"]
+pub mod google {
+    #[path = ""]
+    pub mod cloud {
+        #[path = ""]
+        pub mod bigquery {
+            #[path = ""]
+            pub mod storage {
+                #[path = "google.cloud.bigquery.storage.v1beta2.rs"]
+                pub mod v1beta2;
+            }
+        }
+    }
+    #[path = "google.rpc.rs"]
+    pub mod rpc;
 }
 
 pub mod client;
