@@ -30,12 +30,15 @@ use tonic::{Request, Streaming};
 use crate::google::cloud::bigquery::storage::v1beta2::big_query_read_client::BigQueryReadClient;
 use crate::google::cloud::bigquery::storage::v1beta2::{
     read_session::{TableModifiers, TableReadOptions},
-    CreateReadSessionRequest, CreateWriteStreamRequest, DataFormat, ReadRowsRequest,
-    ReadRowsResponse, ReadSession as BigQueryReadSession, ReadStream,
+    AppendRowsRequest, AppendRowsResponse, CreateReadSessionRequest, CreateWriteStreamRequest,
+    DataFormat, ReadRowsRequest, ReadRowsResponse, ReadSession as BigQueryReadSession, ReadStream,
+    WriteStream,
 };
 
+use crate::google::cloud::bigquery::storage::v1beta2::big_query_write_client::BigQueryWriteClient;
 use crate::Error;
 use crate::RowsStreamReader;
+use futures::Stream;
 
 static API_ENDPOINT: &'static str = "https://bigquerystorage.googleapis.com";
 static API_DOMAIN: &'static str = "bigquerystorage.googleapis.com";
@@ -213,6 +216,7 @@ where
 pub struct Client<C> {
     auth: Authenticator<C>,
     big_query_read_client: BigQueryReadClient<Channel>,
+    big_query_write_client: BigQueryWriteClient<Channel>,
 }
 
 impl<C> Client<C>
@@ -227,9 +231,16 @@ where
             .connect()
             .await?;
         let big_query_read_client = BigQueryReadClient::new(channel);
+        let tls_config = ClientTlsConfig::new().domain_name(API_DOMAIN);
+        let channel = Channel::from_static(API_ENDPOINT)
+            .tls_config(tls_config)?
+            .connect()
+            .await?;
+        let big_query_write_client = BigQueryWriteClient::new(channel);
         Ok(Self {
             auth,
             big_query_read_client,
+            big_query_write_client,
         })
     }
 
@@ -246,6 +257,40 @@ where
         meta.insert("authorization", bearer_value);
         meta.insert("x-goog-request-params", MetadataValue::from_str(params)?);
         Ok(req)
+    }
+
+    async fn new_streaming_request<T>(
+        &self,
+        t: T,
+        params: &str,
+    ) -> Result<Request<impl Stream<Item = T>>, Error> {
+        let token = self
+            .auth
+            .token(&[
+                API_SCOPE,
+                "https://www.googleapis.com/auth/bigquery.insertdata",
+            ])
+            .await?;
+        let bearer_token = format!("Bearer {}", token.as_str());
+        let bearer_value = MetadataValue::from_str(&bearer_token)?;
+        let mut req = Request::new(futures::stream::iter(std::iter::once(t)));
+        let meta = req.metadata_mut();
+        meta.insert("authorization", bearer_value);
+        meta.insert("x-goog-request-params", MetadataValue::from_str(params)?);
+        Ok(req)
+    }
+
+    pub async fn append_rows(
+        &mut self,
+        req: AppendRowsRequest,
+    ) -> Result<Streaming<AppendRowsResponse>, Error> {
+        let wrapped = self.new_streaming_request(req, "").await?;
+        let res = self
+            .big_query_write_client
+            .append_rows(wrapped)
+            .await?
+            .into_inner();
+        Ok(res)
     }
 
     async fn create_read_session(
